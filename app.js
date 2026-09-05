@@ -4,8 +4,7 @@ import {
     Partials,
     Events,
     EmbedBuilder,
-    PermissionFlagsBits,
-    AuditLogEvent
+    PermissionFlagsBits
 } from "discord.js";
 import {
     joinVoiceChannel,
@@ -49,7 +48,7 @@ function saveSettings() {
 
 // Bot Credentials & Permanent Assets
 const BOT_TOKEN = process.env.DISCORD_TOKEN;
-const BANNER_URI = "https://raw.githubusercontent.com/yogesh28-dev/vaelkry/main/banner.png";
+const BANNER_URI = "https://cdn.discordapp.com/attachments/1542886509563093082/1545320886842953728/vaelkry-banner.png";
 
 const client = new Client({
     intents: [
@@ -64,7 +63,7 @@ const client = new Client({
     partials: [Partials.Message, Partials.Channel, Partials.GuildMember]
 });
 
-// Exact Audit Logging Channels
+// Audit Logging Channels
 const AUDIT_CHANNELS = {
     MEMBER_ACTIONS: "member-actions-mode",
     CHANNEL_CHANGES: "channel-category-changes",
@@ -221,13 +220,44 @@ client.on(Events.GuildMemberRemove, async (member) => {
     }
 });
 
-// Commands & Moderation Handler
+// Commands, Dynamic Embeds & Moderation Handler
 client.on(Events.MessageCreate, async (message) => {
     if (message.author.bot || !message.guild) return;
 
     const content = message.content.trim();
     const args = content.split(/\s+/);
     const cmd = args[0].toLowerCase();
+
+    // Dynamic Embed Sender Command: ()?vaelmess [Title] Message body
+    if (content.startsWith("()?vaelmess")) {
+        if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
+
+        const match = content.match(/^\(\)\?vaelmess\s+\[(.*?)\]\s*([\s\S]*)/i);
+        if (!match) {
+            return message.reply("⚠️ Format:\n`()?vaelmess [Your Title]`\nYour message body goes here...");
+        }
+
+        const embedTitle = match[1].trim();
+        const embedBody = match[2].trim();
+
+        const customEmbed = new EmbedBuilder()
+            .setColor("#000000")
+            .setAuthor({
+                name: "⸜  V Λ Σ L K Я Y  ⸝",
+                iconURL: message.guild.iconURL({ dynamic: true })
+            })
+            .setTitle(embedTitle)
+            .setDescription(embedBody)
+            .setFooter({
+                text: "V Λ Σ L K Я Y Ecosystem",
+                iconURL: message.guild.iconURL({ dynamic: true })
+            })
+            .setTimestamp();
+
+        await message.channel.send({ embeds: [customEmbed] });
+        await message.delete().catch(() => { });
+        return;
+    }
 
     // Bot Configuration Commands
     if (cmd === "()?welcomeactivate") {
@@ -270,48 +300,11 @@ client.on(Events.MessageCreate, async (message) => {
         await message.reply("👋 Disconnected from voice channel.");
     }
 
-    // Embed Poster for Services
-    if (cmd === "()?postservices") {
-        if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
-        const serviceEmbed = new EmbedBuilder()
-            .setColor("#000000")
-            .setAuthor({
-                name: "⸜  V Λ Σ L K Я Y  ⸝",
-                iconURL: message.guild.iconURL({ dynamic: true })
-            })
-            .setTitle("#  VAELKRYY — DISCORD SERVICES")
-            .setDescription(
-                `Build. Manage. Automate.\n\n` +
-                `VAELKRYY provides professional Discord solutions designed for communities, creators, teams, and businesses.\n\n` +
-                `**OUR SERVICES**\n\n` +
-                `> 🏗️ **Discord Server Development**\n` +
-                `> Custom server architecture, channels, roles, permissions, onboarding & complete server configuration.\n\n` +
-                `> 🛡️ **Discord Server Management**\n` +
-                `> Professional server organization, moderation systems, maintenance & ongoing management.\n\n` +
-                `> 🤖 **Discord Bot Solutions**\n` +
-                `> Custom bot setup, configuration, integrations & advanced server functionality.\n\n` +
-                `> 💻 **Discord Bot Development**\n` +
-                `> Fully customized bots developed around your requirements, workflows & community needs.\n\n` +
-                `> ⚙️ **Discord Server Automation**\n` +
-                `> Automated workflows, moderation, notifications, role management & custom systems.\n\n` +
-                `―――――――――――――――\n\n` +
-                `**INTERESTED IN OUR SERVICES?**\n\n` +
-                `Contact **VAELKRYY** directly via Discord DM.\n\n` +
-                `Please include:\n` +
-                `• Service required\n` +
-                `• Project requirements\n` +
-                `• Any references or examples\n` +
-                `• Your budget, if applicable`
-            );
-        await message.channel.send({ embeds: [serviceEmbed] });
-        await message.delete().catch(() => { });
-    }
-
     // Moderation Commands
     if (cmd === "()?kick") {
         if (!message.member.permissions.has(PermissionFlagsBits.KickMembers)) return;
         const target = message.mentions.members.first();
-        if (!target) return message.reply("Specify member to kick: `()?kick @user reason`");
+        if (!target) return message.reply("Specify member: `()?kick @user reason`");
         const reason = args.slice(2).join(" ") || "No reason provided";
         await target.kick(reason);
         await message.reply(`👢 **${target.user.tag}** has been kicked.`);
@@ -320,7 +313,7 @@ client.on(Events.MessageCreate, async (message) => {
     if (cmd === "()?ban") {
         if (!message.member.permissions.has(PermissionFlagsBits.BanMembers)) return;
         const target = message.mentions.members.first();
-        if (!target) return message.reply("Specify member to ban: `()?ban @user reason`");
+        if (!target) return message.reply("Specify member: `()?ban @user reason`");
         const reason = args.slice(2).join(" ") || "No reason provided";
         await target.ban({ reason });
         await message.reply(`🔨 **${target.user.tag}** has been banned.`);
@@ -344,7 +337,7 @@ client.on(Events.MessageCreate, async (message) => {
     }
 });
 
-// Audit Logging: Voice Switch / Move
+// Audit Logging: Voice State Updates
 client.on(Events.VoiceStateUpdate, (oldState, newState) => {
     const logCh = getLogChannel(newState.guild, AUDIT_CHANNELS.ACTIVITY_ALERTS) ||
         getLogChannel(newState.guild, "voice-logs");
@@ -361,7 +354,7 @@ client.on(Events.VoiceStateUpdate, (oldState, newState) => {
     }
 });
 
-// Audit Logging: Channel Created / Deleted
+// Audit Logging: Channels Created / Deleted
 client.on(Events.ChannelCreate, (channel) => {
     if (!channel.guild) return;
     const logCh = getLogChannel(channel.guild, AUDIT_CHANNELS.CHANNEL_CHANGES);

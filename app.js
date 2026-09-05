@@ -48,7 +48,7 @@ function saveSettings() {
 
 // Bot Credentials & Permanent Assets
 const BOT_TOKEN = process.env.DISCORD_TOKEN;
-const BANNER_URI = "https://raw.githubusercontent.com/yogesh28-dev/vaelkry/main/banner.png";
+const BANNER_URI = "https://cdn.discordapp.com/attachments/1542886509563093082/1545320886842953728/vaelkry-banner.png";
 
 const client = new Client({
     intents: [

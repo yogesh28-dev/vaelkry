@@ -4,7 +4,6 @@ import {
     Partials,
     Events,
     EmbedBuilder,
-    AuditLogEvent,
     PermissionFlagsBits
 } from "discord.js";
 import {
@@ -20,13 +19,13 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Express Keep-Alive Server for Railway
+// Keep-Alive Server for Railway
 const app = express();
 const PORT = process.env.PORT || 10000;
-app.get("/", (req, res) => res.send("V Λ Σ L K Я Y Bot is Active 24/7."));
+app.get("/", (req, res) => res.send("V Λ Σ L K Я Y Bot is online 24/7."));
 app.listen(PORT, () => console.log(`Keep-Alive server active on port ${PORT}`));
 
-// Persistent Config File
+// Config File for Saved Channels & VC
 const CONFIG_FILE = path.join(__dirname, "bot_settings.json");
 let settings = {
     welcomeChannelId: null,
@@ -47,7 +46,7 @@ function saveSettings() {
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(settings, null, 2));
 }
 
-// Bot Credentials & Assets
+// Bot Credentials & Permanent Assets
 const BOT_TOKEN = process.env.DISCORD_TOKEN;
 const BANNER_URI = "https://raw.githubusercontent.com/yogesh28-dev/vaelkry/main/banner.png";
 
@@ -64,7 +63,7 @@ const client = new Client({
     partials: [Partials.Message, Partials.Channel, Partials.GuildMember]
 });
 
-// Audit Channel Mapping
+// Audit Logging Channels
 const AUDIT_CHANNELS = {
     MEMBER_ACTIONS: "member-actions-mode",
     CHANNEL_CHANGES: "channel-category-changes",
@@ -79,7 +78,7 @@ function getLogChannel(guild, name) {
     return guild.channels.cache.find(c => c.name === name);
 }
 
-// 24/7 Voice Channel Connection Function
+// 24/7 Voice Connection Function
 async function connectToVoice(channel) {
     try {
         const connection = joinVoiceChannel({
@@ -111,7 +110,7 @@ async function connectToVoice(channel) {
 client.once(Events.ClientReady, async (c) => {
     console.log(`🤖 Bot online: ${c.user.tag}`);
 
-    // Auto-reconnect to 24/7 Voice Channel on restart
+    // Auto-reconnect to 24/7 VC
     if (settings.guildId && settings.voiceChannelId) {
         const guild = client.guilds.cache.get(settings.guildId);
         if (guild) {
@@ -124,7 +123,7 @@ client.once(Events.ClientReady, async (c) => {
     }
 });
 
-// Welcome Member Event
+// Welcome Event
 client.on(Events.GuildMemberAdd, async (member) => {
     if (settings.welcomeChannelId) {
         const channel = member.guild.channels.cache.get(settings.welcomeChannelId);
@@ -136,15 +135,16 @@ client.on(Events.GuildMemberAdd, async (member) => {
                     iconURL: member.guild.iconURL({ dynamic: true })
                 })
                 .setTitle(`Welcome to V Λ Σ L K Я Y — ${member.user.username}`)
+                .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 512 }))
                 .setDescription(
                     `*Your destination for premium digital solutions.*\n\n` +
-                    `Explore our ecosystem of Discord Services, Custom Bots, Automation, Optimization, Creative Services & Digital Resources.\n\n` +
-                    `**⇆ GET STARTED ⇆**\n\n` +
-                    `⤀ Read our guidelines → <#1542886572221792286>\n` +
-                    `⤀ Explore our services → <#1542887034178506873>\n` +
-                    `⤀ Access free resources → <#1542886768364355704>\n` +
-                    `⤀ Need assistance? → <#1543198370561130596>\n` +
-                    `⤀ Stay updated → <#1543198631878856744>\n\n` +
+                    `Explore our ecosystem of **Discord Services**, **Custom Bots**, **Automation**, **Optimization**, **Creative Services & Digital Resources**.\n\n` +
+                    `**⇋ GET STARTED ⇋**\n\n` +
+                    `↠ Read our guidelines → <#1542886572221792286>\n` +
+                    `↠ Explore our services → <#1542887034178506873>\n` +
+                    `↠ Access free resources → <#1542886768364355704>\n` +
+                    `↠ Need assistance? → <#1543198370561130596>\n` +
+                    `↠ Stay updated → <#1543198631878856744>\n\n` +
                     `📌 **Server Invite Link**\n\n` +
                     `**BUILD • AUTOMATE • OPTIMIZE • CREATE**\n\n` +
                     `*Thank you for choosing V Λ Σ L K Я Y.*`
@@ -175,7 +175,7 @@ client.on(Events.GuildMemberAdd, async (member) => {
     }
 });
 
-// Goodbye Member Event
+// Goodbye Event
 client.on(Events.GuildMemberRemove, async (member) => {
     if (settings.byeChannelId) {
         const channel = member.guild.channels.cache.get(settings.byeChannelId);
@@ -187,6 +187,7 @@ client.on(Events.GuildMemberRemove, async (member) => {
                     iconURL: member.guild.iconURL({ dynamic: true })
                 })
                 .setTitle(`Farewell — ${member.user.username}`)
+                .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 512 }))
                 .setDescription(`We are sad to see you leave **V Λ Σ L K Я I Σ S**. We hope to see you again soon!`)
                 .setImage(BANNER_URI)
                 .setFooter({
@@ -235,7 +236,7 @@ client.on(Events.MessageCreate, async (message) => {
         if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
         const voiceChannel = message.member.voice.channel;
         if (!voiceChannel) {
-            return message.reply("❌ Neenga modhalla oru voice channel-kulla connect aagi irukkanum!");
+            return message.reply("❌ Connect to a voice channel first!");
         }
 
         settings.guildId = message.guild.id;

@@ -1,26 +1,37 @@
-const {
+import {
     Client,
     GatewayIntentBits,
     Partials,
+    Events,
     EmbedBuilder,
     AuditLogEvent,
-    PermissionsBitField
-} = require("discord.js");
-const {
+    PermissionFlagsBits
+} from "discord.js";
+import {
     joinVoiceChannel,
-    getVoiceConnection,
     VoiceConnectionStatus,
     entersState
-} = require("@discordjs/voice");
-const http = require("http");
-const fs = require("fs");
+} from "@discordjs/voice";
+import express from "express";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
-// Config Store
-const CONFIG_FILE = "./bot_settings.json";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Express Keep-Alive Server for Railway
+const app = express();
+const PORT = process.env.PORT || 10000;
+app.get("/", (req, res) => res.send("V Λ Σ L K Я Y Bot is Active 24/7."));
+app.listen(PORT, () => console.log(`Keep-Alive server active on port ${PORT}`));
+
+// Persistent Config File
+const CONFIG_FILE = path.join(__dirname, "bot_settings.json");
 let settings = {
     welcomeChannelId: null,
-    byebyeChannelId: null,
-    vcId: null,
+    byeChannelId: null,
+    voiceChannelId: null,
     guildId: null
 };
 
@@ -36,9 +47,9 @@ function saveSettings() {
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(settings, null, 2));
 }
 
-// Bot Credentials
+// Bot Credentials & Assets
 const BOT_TOKEN = process.env.DISCORD_TOKEN;
-const BANNER_URL = "https://raw.githubusercontent.com/yogesh28-dev/vaelkry/main/banner.png";
+const BANNER_URI = "https://raw.githubusercontent.com/yogesh28-dev/vaelkry/main/banner.png";
 
 const client = new Client({
     intents: [
@@ -53,320 +64,268 @@ const client = new Client({
     partials: [Partials.Message, Partials.Channel, Partials.GuildMember]
 });
 
-// Audit Logger Helper
-async function sendAudit(guild, channelKey, embed) {
-    try {
-        const targetChannel = guild.channels.cache.find(c => c.name.toLowerCase().includes(channelKey.toLowerCase()));
-        if (targetChannel && targetChannel.isTextBased()) {
-            await targetChannel.send({ embeds: [embed] });
-        }
-    } catch (err) {
-        console.error(`Audit dispatch failure [${channelKey}]:`, err.message);
-    }
+// Audit Channel Mapping
+const AUDIT_CHANNELS = {
+    MEMBER_ACTIONS: "member-actions-mode",
+    CHANNEL_CHANGES: "channel-category-changes",
+    ROLES_PERMISSIONS: "roles-permissions",
+    MESSAGES_THREADS: "messages-threads",
+    ACTIVITY_ALERTS: "activity-alerts",
+    VOICE_LOGS: "voice-logs",
+    SERVER_EVENTS: "server-events"
+};
+
+function getLogChannel(guild, name) {
+    return guild.channels.cache.find(c => c.name === name);
 }
 
-// 24/7 Voice Engine
-async function connectVoice(channel) {
-    if (!channel) return;
+// 24/7 Voice Channel Connection Function
+async function connectToVoice(channel) {
     try {
         const connection = joinVoiceChannel({
             channelId: channel.id,
             guildId: channel.guild.id,
             adapterCreator: channel.guild.voiceAdapterCreator,
-            selfDeaf: true,
-            selfMute: false
+            selfDeaf: false,
+            selfMute: true
         });
 
         connection.on(VoiceConnectionStatus.Disconnected, async () => {
             try {
                 await Promise.race([
                     entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
-                    entersState(connection, VoiceConnectionStatus.Connecting, 5_000)
+                    entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
                 ]);
             } catch {
                 connection.destroy();
-                setTimeout(() => connectVoice(channel), 5000);
+                setTimeout(() => connectToVoice(channel), 5000);
             }
         });
+
+        return connection;
     } catch (err) {
-        console.error("VC Connection Exception:", err.message);
-        setTimeout(() => connectVoice(channel), 5000);
+        console.error("Voice connection error:", err);
     }
 }
 
-// Client Ready
-client.once("ready", async () => {
-    console.log(`🤖 Bot online: ${client.user.tag}`);
+client.once(Events.ClientReady, async (c) => {
+    console.log(`🤖 Bot online: ${c.user.tag}`);
 
-    if (settings.guildId && settings.vcId) {
+    // Auto-reconnect to 24/7 Voice Channel on restart
+    if (settings.guildId && settings.voiceChannelId) {
         const guild = client.guilds.cache.get(settings.guildId);
         if (guild) {
-            const vc = guild.channels.cache.get(settings.vcId);
-            if (vc) connectVoice(vc);
+            const voiceChannel = guild.channels.cache.get(settings.voiceChannelId);
+            if (voiceChannel) {
+                await connectToVoice(voiceChannel);
+                console.log(`🔊 Reconnected to 24/7 Voice: ${voiceChannel.name}`);
+            }
         }
     }
 });
 
-// Welcome System
-client.on("guildMemberAdd", async (member) => {
-    if (!settings.welcomeChannelId) return;
-    const channel = member.guild.channels.cache.get(settings.welcomeChannelId);
-    if (!channel) return;
+// Welcome Member Event
+client.on(Events.GuildMemberAdd, async (member) => {
+    if (settings.welcomeChannelId) {
+        const channel = member.guild.channels.cache.get(settings.welcomeChannelId);
+        if (channel) {
+            const welcomeEmbed = new EmbedBuilder()
+                .setColor("#000000")
+                .setAuthor({
+                    name: "⸜  V Λ Σ L K Я Y  ⸝",
+                    iconURL: member.guild.iconURL({ dynamic: true })
+                })
+                .setTitle(`Welcome to V Λ Σ L K Я Y — ${member.user.username}`)
+                .setDescription(
+                    `*Your destination for premium digital solutions.*\n\n` +
+                    `Explore our ecosystem of Discord Services, Custom Bots, Automation, Optimization, Creative Services & Digital Resources.\n\n` +
+                    `**⇆ GET STARTED ⇆**\n\n` +
+                    `⤀ Read our guidelines → <#1542886572221792286>\n` +
+                    `⤀ Explore our services → <#1542887034178506873>\n` +
+                    `⤀ Access free resources → <#1542886768364355704>\n` +
+                    `⤀ Need assistance? → <#1543198370561130596>\n` +
+                    `⤀ Stay updated → <#1543198631878856744>\n\n` +
+                    `📌 **Server Invite Link**\n\n` +
+                    `**BUILD • AUTOMATE • OPTIMIZE • CREATE**\n\n` +
+                    `*Thank you for choosing V Λ Σ L K Я Y.*`
+                )
+                .setImage(BANNER_URI)
+                .setFooter({
+                    text: `Member #${member.guild.memberCount} • V Λ Σ L K Я Y Ecosystem`,
+                    iconURL: member.guild.iconURL({ dynamic: true })
+                })
+                .setTimestamp();
 
-    const count = member.guild.memberCount;
-    const welcomeEmbed = new EmbedBuilder()
-        .setColor("#111214")
-        .setAuthor({
-            name: "◟ V Λ Σ L K Я Y ◞",
-            iconURL: client.user.displayAvatarURL({ dynamic: true })
-        })
-        .setTitle(`Welcome to V Λ Σ L K Я Y — ${member.user.tag}`)
-        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-        .setDescription(
-            `*Your destination for premium digital solutions.*\n\n` +
-            `Explore our ecosystem of **Discord Services, Custom Bots, Automation, Optimization, Creative Services & Digital Resources.**\n\n` +
-            `⇋ **GET STARTED** ⇌\n\n` +
-            `↠ Read our guidelines ➔ <#rules>\n` +
-            `↠ Explore our services ➔ <#store>\n` +
-            `↠ Access free resources ➔ <#free-zone>\n` +
-            `↠ Need assistance? ➔ <#support>\n` +
-            `↠ Stay updated ➔ <#announcement>\n\n` +
-            `📌 **Server Invite Link**\n\n` +
-            `**BUILD • AUTOMATE • OPTIMIZE • CREATE**\n\n` +
-            `*Thank you for choosing V Λ Σ L K Я Y.*`
-        )
-        .setImage(BANNER_URL)
-        .setFooter({
-            text: `Member #${count} • V Λ Σ L K Я Y Ecosystem`,
-            iconURL: client.user.displayAvatarURL()
-        })
-        .setTimestamp();
+            await channel.send({
+                content: `Hey <@${member.id}>, welcome to **V Λ Σ L K Я I Σ S**!`,
+                embeds: [welcomeEmbed]
+            });
+        }
+    }
 
-    await channel.send({
-        content: `Hey <@${member.id}>, welcome to **V Λ Σ L K Я I Σ S**!`,
-        embeds: [welcomeEmbed]
-    });
+    const logCh = getLogChannel(member.guild, AUDIT_CHANNELS.MEMBER_ACTIONS);
+    if (logCh) {
+        const embed = new EmbedBuilder()
+            .setColor("#2b2d31")
+            .setTitle("📥 Member Joined")
+            .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+            .setDescription(`<@${member.id}> (${member.user.tag}) joined the server.\nAccount Created: <t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`)
+            .setTimestamp();
+        logCh.send({ embeds: [embed] });
+    }
 });
 
-// Byebye System
-client.on("guildMemberRemove", async (member) => {
-    if (!settings.byebyeChannelId) return;
-    const channel = member.guild.channels.cache.get(settings.byebyeChannelId);
-    if (!channel) return;
+// Goodbye Member Event
+client.on(Events.GuildMemberRemove, async (member) => {
+    if (settings.byeChannelId) {
+        const channel = member.guild.channels.cache.get(settings.byeChannelId);
+        if (channel) {
+            const byeEmbed = new EmbedBuilder()
+                .setColor("#000000")
+                .setAuthor({
+                    name: "⸜  V Λ Σ L K Я Y  ⸝",
+                    iconURL: member.guild.iconURL({ dynamic: true })
+                })
+                .setTitle(`Farewell — ${member.user.username}`)
+                .setDescription(`We are sad to see you leave **V Λ Σ L K Я I Σ S**. We hope to see you again soon!`)
+                .setImage(BANNER_URI)
+                .setFooter({
+                    text: `Remaining Members: ${member.guild.memberCount} • V Λ Σ L K Я Y Ecosystem`,
+                    iconURL: member.guild.iconURL({ dynamic: true })
+                })
+                .setTimestamp();
 
-    const count = member.guild.memberCount;
-    const byeEmbed = new EmbedBuilder()
-        .setColor("#111214")
-        .setAuthor({
-            name: "◟ V Λ Σ L K Я Y ◞",
-            iconURL: client.user.displayAvatarURL({ dynamic: true })
-        })
-        .setTitle(`◟ THANK YOU FOR VISITING V Λ Σ L K Я Y ◞`)
-        .setThumbnail("https://assets-global.website-files.com/6257adef93867e50d84d30e2/636e0a6a49cf127bf92de1e2_icon_clyde_blurple_RGB.png")
-        .setDescription(
-            `Farewell **${member.user.username}** — *your journey with us may pause here, but our doors are always open.*\n\n` +
-            `We appreciate your presence and support within the ecosystem. Stay connected with our network for future services, digital resources, and corporate updates.\n\n` +
-            `«✦ **Keep creating. Keep building. Keep evolving.** ✦»\n\n` +
-            `**BUILD • AUTOMATE • OPTIMIZE • CREATE**\n\n` +
-            `*Thank you for being part of V Λ Σ L K Я Y.*`
-        )
-        .setImage(BANNER_URL)
-        .setFooter({
-            text: `Remaining Members: ${count} • V Λ Σ L K Я Y Departure Log`,
-            iconURL: client.user.displayAvatarURL()
-        })
-        .setTimestamp();
+            await channel.send({ embeds: [byeEmbed] });
+        }
+    }
 
-    await channel.send({ embeds: [byeEmbed] });
+    const logCh = getLogChannel(member.guild, AUDIT_CHANNELS.MEMBER_ACTIONS);
+    if (logCh) {
+        const embed = new EmbedBuilder()
+            .setColor("#ed4245")
+            .setTitle("📤 Member Left")
+            .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+            .setDescription(`<@${member.id}> (${member.user.tag}) left the server.`)
+            .setTimestamp();
+        logCh.send({ embeds: [embed] });
+    }
 });
 
-// Commands Engine
-client.on("messageCreate", async (message) => {
+// Message Commands Handler
+client.on(Events.MessageCreate, async (message) => {
     if (message.author.bot || !message.guild) return;
 
-    // Auto-Moderation (Invite / Phishing links)
-    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-        const inviteRegex = /(https?:\/\/)?(www\.)?(discord\.(gg|io|me|li)|discordapp\.com\/invite)\/.+/i;
-        const scamRegex = /(nitro|free-nitro|steamgift|airdrop).*(discord\.gg|gift|claim)/i;
+    const content = message.content.trim();
 
-        if (inviteRegex.test(message.content) || scamRegex.test(message.content)) {
-            await message.delete().catch(() => { });
-            const warnMsg = await message.channel.send(`⚠️ ${message.author}, unauthorized invite/malicious links are prohibited.`);
-            setTimeout(() => warnMsg.delete().catch(() => { }), 4000);
-
-            const modLog = new EmbedBuilder()
-                .setColor("#ff4b4b")
-                .setTitle("🛡️ Auto-Moderation Triggered")
-                .addFields(
-                    { name: "Target", value: `${message.author.tag} (\`${message.author.id}\`)`, inline: true },
-                    { name: "Channel", value: `<#${message.channel.id}>`, inline: true },
-                    { name: "Reason", value: "Suspicious Link / Invite Post", inline: false },
-                    { name: "Message Content", value: `\`\`\`${message.content.slice(0, 500)}\`\`\``, inline: false }
-                )
-                .setTimestamp();
-            sendAudit(message.guild, "member-actions-mode", modLog);
-            return;
-        }
-    }
-
-    const prefix = "()? ";
-    const altPrefix = "()?";
-    let content = message.content;
-    if (!content.startsWith(prefix) && !content.startsWith(altPrefix)) return;
-
-    const usedPrefix = content.startsWith(prefix) ? prefix : altPrefix;
-    const args = content.slice(usedPrefix.length).trim().split(/ +/);
-    const command = args.shift().toLowerCase();
-
-    // ()?vcjoin
-    if (command === "vcjoin") {
-        const voiceChannel = message.member.voice.channel;
-        if (!voiceChannel) {
-            return message.reply("❌ Mudhala oru voice channel-la join pannunga!");
-        }
-        settings.vcId = voiceChannel.id;
-        settings.guildId = message.guild.id;
-        saveSettings();
-        connectVoice(voiceChannel);
-        return message.reply(`🔒 Bound & connected 24/7 to **${voiceChannel.name}**.`);
-    }
-
-    // ()?vcleave
-    if (command === "vcleave") {
-        const connection = getVoiceConnection(message.guild.id);
-        if (connection) {
-            connection.destroy();
-            settings.vcId = null;
-            saveSettings();
-            return message.reply("🔌 Disconnected from voice channel.");
-        } else {
-            return message.reply("❌ The bot is not in any voice channel.");
-        }
-    }
-
-    // ()?welcomeactivate
-    if (command === "welcomeactivate") {
+    if (content === "()?welcomeactivate") {
+        if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
         settings.welcomeChannelId = message.channel.id;
         saveSettings();
-        return message.reply(`✅ Welcome messages activated for <#${message.channel.id}>.`);
+        await message.reply(`✅ Welcome messages activated for <#${message.channel.id}>.`);
     }
 
-    // ()?byebyeactivate
-    if (command === "byebyeactivate") {
-        settings.byebyeChannelId = message.channel.id;
+    if (content === "()?byebyeactivate") {
+        if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
+        settings.byeChannelId = message.channel.id;
         saveSettings();
-        return message.reply(`✅ Departure/Goodbye messages activated for <#${message.channel.id}>.`);
+        await message.reply(`✅ ByeBye messages activated for <#${message.channel.id}>.`);
+    }
+
+    if (content === "()?vcjoin") {
+        if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
+        const voiceChannel = message.member.voice.channel;
+        if (!voiceChannel) {
+            return message.reply("❌ Neenga modhalla oru voice channel-kulla connect aagi irukkanum!");
+        }
+
+        settings.guildId = message.guild.id;
+        settings.voiceChannelId = voiceChannel.id;
+        saveSettings();
+
+        await connectToVoice(voiceChannel);
+        await message.reply(`✅ 24/7 Voice connection locked to **${voiceChannel.name}**.`);
+    }
+
+    if (content === "()?vcleave") {
+        if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
+        settings.voiceChannelId = null;
+        saveSettings();
+
+        const connection = joinVoiceChannel({
+            channelId: message.channel.id,
+            guildId: message.guild.id,
+            adapterCreator: message.guild.voiceAdapterCreator
+        });
+        connection.destroy();
+        await message.reply("👋 Disconnected from voice channel.");
     }
 });
 
-// Audit Logs Listeners
-client.on("guildAuditLogEntryCreate", async (entry, guild) => {
-    const { action, executorId, targetId, reason } = entry;
-    const mod = executorId ? `<@${executorId}>` : "System";
-
-    if (action === AuditLogEvent.MemberKick || action === AuditLogEvent.MemberBanAdd) {
-        const embed = new EmbedBuilder()
-            .setColor("#ff3333")
-            .setTitle(action === AuditLogEvent.MemberKick ? "👢 Member Kicked" : "🔨 Member Banned")
-            .addFields(
-                { name: "Target", value: `<@${targetId}> (\`${targetId}\`)`, inline: true },
-                { name: "Moderator", value: mod, inline: true },
-                { name: "Reason", value: reason || "None provided", inline: false }
-            )
-            .setTimestamp();
-        sendAudit(guild, "member-actions-mode", embed);
-    }
-});
-
-client.on("channelCreate", async (channel) => {
-    if (!channel.guild) return;
-    const embed = new EmbedBuilder()
-        .setColor("#00ff88")
-        .setTitle("📁 Channel Created")
-        .addFields(
-            { name: "Name", value: channel.name, inline: true },
-            { name: "Type", value: `${channel.type}`, inline: true }
-        )
-        .setTimestamp();
-    sendAudit(channel.guild, "channel-category-changes", embed);
-});
-
-client.on("channelDelete", async (channel) => {
-    if (!channel.guild) return;
-    const embed = new EmbedBuilder()
-        .setColor("#ff0044")
-        .setTitle("📁 Channel Deleted")
-        .addFields({ name: "Name", value: channel.name, inline: true })
-        .setTimestamp();
-    sendAudit(channel.guild, "channel-category-changes", embed);
-});
-
-client.on("roleCreate", async (role) => {
-    const embed = new EmbedBuilder()
-        .setColor("#3399ff")
-        .setTitle("🛡️ Role Created")
-        .addFields({ name: "Role", value: `${role.name} (\`${role.id}\`)`, inline: true })
-        .setTimestamp();
-    sendAudit(role.guild, "roles-permissions", embed);
-});
-
-client.on("roleDelete", async (role) => {
-    const embed = new EmbedBuilder()
-        .setColor("#ff5500")
-        .setTitle("🗑️ Role Deleted")
-        .addFields({ name: "Role Name", value: role.name, inline: true })
-        .setTimestamp();
-    sendAudit(role.guild, "roles-permissions", embed);
-});
-
-client.on("messageDelete", async (message) => {
+// Audit Logging: Message Delete
+client.on(Events.MessageDelete, async (message) => {
     if (!message.guild || message.author?.bot) return;
+    const logCh = getLogChannel(message.guild, AUDIT_CHANNELS.MESSAGES_THREADS);
+    if (!logCh) return;
+
     const embed = new EmbedBuilder()
-        .setColor("#e74c3c")
+        .setColor("#ed4245")
         .setTitle("🗑️ Message Deleted")
-        .addFields(
-            { name: "Author", value: message.author ? `${message.author.tag}` : "Unknown", inline: true },
-            { name: "Channel", value: `<#${message.channel.id}>`, inline: true },
-            { name: "Content", value: message.content ? `\`\`\`${message.content.slice(0, 800)}\`\`\`` : "*No text / media only*", inline: false }
-        )
+        .setDescription(`**Author:** <@${message.author?.id}>\n**Channel:** <#${message.channel.id}>\n**Content:** ${message.content || "*[Embed/Attachment]*"}`)
         .setTimestamp();
-    sendAudit(message.guild, "messages-threads", embed);
+    logCh.send({ embeds: [embed] });
 });
 
-client.on("voiceStateUpdate", async (oldState, newState) => {
-    const guild = newState.guild || oldState.guild;
-    const member = newState.member || oldState.member;
-    if (!guild || member?.user?.bot) return;
+// Audit Logging: Message Edit
+client.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
+    if (!oldMessage.guild || oldMessage.author?.bot) return;
+    if (oldMessage.content === newMessage.content) return;
+    const logCh = getLogChannel(oldMessage.guild, AUDIT_CHANNELS.MESSAGES_THREADS);
+    if (!logCh) return;
+
+    const embed = new EmbedBuilder()
+        .setColor("#fee75c")
+        .setTitle("✏️ Message Edited")
+        .setDescription(`**Author:** <@${oldMessage.author?.id}>\n**Channel:** <#${oldMessage.channel.id}>\n**Before:** ${oldMessage.content}\n**After:** ${newMessage.content}`)
+        .setTimestamp();
+    logCh.send({ embeds: [embed] });
+});
+
+// Audit Logging: Voice State Changes
+client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
+    const logCh = getLogChannel(newState.guild, AUDIT_CHANNELS.VOICE_LOGS);
+    if (!logCh) return;
 
     if (!oldState.channelId && newState.channelId) {
-        const embed = new EmbedBuilder()
-            .setColor("#2ecc71")
-            .setTitle("🔊 Voice Joined")
-            .addFields(
-                { name: "User", value: `${member.user.tag}`, inline: true },
-                { name: "Channel", value: `<#${newState.channelId}>`, inline: true }
-            )
-            .setTimestamp();
-        sendAudit(guild, "activity-alerts", embed);
+        logCh.send({
+            embeds: [
+                new EmbedBuilder()
+                    .setColor("#57f287")
+                    .setTitle("🔊 VC Join")
+                    .setDescription(`<@${newState.id}> joined <#${newState.channelId}>`)
+                    .setTimestamp()
+            ]
+        });
     } else if (oldState.channelId && !newState.channelId) {
-        const embed = new EmbedBuilder()
-            .setColor("#95a5a6")
-            .setTitle("🔇 Voice Left")
-            .addFields(
-                { name: "User", value: `${member.user.tag}`, inline: true },
-                { name: "Channel", value: `<#${oldState.channelId}>`, inline: true }
-            )
-            .setTimestamp();
-        sendAudit(guild, "activity-alerts", embed);
+        logCh.send({
+            embeds: [
+                new EmbedBuilder()
+                    .setColor("#ed4245")
+                    .setTitle("🔇 VC Leave")
+                    .setDescription(`<@${oldState.id}> left <#${oldState.channelId}>`)
+                    .setTimestamp()
+            ]
+        });
+    } else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
+        logCh.send({
+            embeds: [
+                new EmbedBuilder()
+                    .setColor("#5865f2")
+                    .setTitle("🔀 VC Move")
+                    .setDescription(`<@${newState.id}> moved from <#${oldState.channelId}> to <#${newState.channelId}>`)
+                    .setTimestamp()
+            ]
+        });
     }
 });
 
-// Keep-Alive HTTP
-http.createServer((_, res) => {
-    res.writeHead(200, { "Content-Type": "text/plain" });
-    res.end("V Λ Σ L K Я Y Bot Online");
-}).listen(10000, () => {
-    console.log("Keep-Alive server active on port 10000");
-});
-
-client.login(BOT_TOKEN).catch(e => console.error("Gateway Connect Error:", e.message));
+client.login(BOT_TOKEN);

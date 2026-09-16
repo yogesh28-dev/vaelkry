@@ -30,7 +30,7 @@ app.listen(PORT, () => console.log(`Keep-Alive server active on port ${PORT}`));
 // Bot Configuration Constants
 const BOT_TOKEN = process.env.DISCORD_TOKEN;
 const AUTO_ROLE_ID = "1543303146686648432";
-const BANNER_URL = "https://cdn.discordapp.com/attachments/1542886509563093882/1545328886842953728/vaelkry_banner.png";
+const BANNER_URL = "https://cdn.discordapp.com/attachments/1542886509563093082/1545320886842953728/vaelkry-banner.png?ex=6aab89ba&is=6aaa383a&hm=d34ac9c41aa1304d3a0b0372d31c887ae7fdff634dc4b2ca0df22640978072b9&";
 const WELCOME_CHANNEL_ID = "1542886509563093082";
 const GOODBYE_CHANNEL_ID = "1542886546032697394";
 const LOG_MODERATION_ID = "1543297405003505694";

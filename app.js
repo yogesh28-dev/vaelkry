@@ -49,6 +49,7 @@ function saveSettings() {
 // Bot Credentials & Permanent Assets
 const BOT_TOKEN = process.env.DISCORD_TOKEN;
 const BANNER_URI = "https://cdn.discordapp.com/attachments/1542886509563093082/1545320886842953728/vaelkry-banner.png";
+const AUTO_ROLE_ID = "1543303146686648432";
 
 const client = new Client({
     intents: [
@@ -135,6 +136,13 @@ client.once(Events.ClientReady, async (c) => {
 
 // Welcome Event
 client.on(Events.GuildMemberAdd, async (member) => {
+    // Auto-role assignment for new members
+    try {
+        await member.roles.add(AUTO_ROLE_ID);
+    } catch (err) {
+        console.error(`Failed to auto-assign role to member ${member.id}:`, err);
+    }
+
     if (settings.welcomeChannelId) {
         const channel = member.guild.channels.cache.get(settings.welcomeChannelId);
         if (channel) {
@@ -298,6 +306,35 @@ client.on(Events.MessageCreate, async (message) => {
         });
         connection.destroy();
         await message.reply("👋 Disconnected from voice channel.");
+    }
+
+    // Bulk Role Assignment Command
+    if (cmd === "()?giveroleall") {
+        if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
+
+        const statusMsg = await message.reply("⏳ Starting member fetching and role assignment...");
+        try {
+            const members = await message.guild.members.fetch();
+            let updatedCount = 0;
+
+            for (const member of members.values()) {
+                if (member.user.bot || member.roles.cache.has(AUTO_ROLE_ID)) continue;
+
+                try {
+                    await member.roles.add(AUTO_ROLE_ID);
+                    updatedCount++;
+                } catch (err) {
+                    console.error(`Failed to assign role to ${member.user.tag} (${member.id}):`, err);
+                }
+
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+
+            await statusMsg.edit(`✅ Bulk role assignment complete! Assigned role to **${updatedCount}** members.`);
+        } catch (err) {
+            console.error("Error during giveroleall command execution:", err);
+            await statusMsg.edit("❌ Failed to complete bulk role assignment due to an error.");
+        }
     }
 
     // Moderation Commands

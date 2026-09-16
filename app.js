@@ -47,7 +47,7 @@ function saveSettings() {
 }
 
 // Bot Credentials & Permanent Assets
-const BOT_TOKEN = process.env.DISCORD_TOKEN;
+const BOT_TOKEN = "MTU0MzE1ODI1NzcwOTg3NTIwMA.GIuxQH.TYut0cQfK7PwPdWVWkB_v06vspJ809HQZmeTdQ";
 const BANNER_URI = "https://cdn.discordapp.com/attachments/1542886509563093082/1545320886842953728/vaelkry-banner.png";
 const AUTO_ROLE_ID = "1543303146686648432";
 
